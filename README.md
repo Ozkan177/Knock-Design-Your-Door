@@ -68,14 +68,12 @@ If `ohlc_data.json` is already present, you can skip to Step 4. Otherwise, gener
 2. Analyze data: `python analyze_data/analyzer_llama.py`
 
 ### Step 4: Launch the Terminal
-Since the frontend uses ES6 modules and fetch API, it must be served via a local web server (opening the HTML file directly in the browser will cause CORS errors).
-- **Using Python**:
-  Run this command in the root project folder:
-  ```bash
-  python -m http.server 8000
-  ```
-  Then visit `http://localhost:8000/terminal.html` in your browser.
-- **Using VS Code**: Use the "Live Server" extension.
+Since the frontend uses ES6 modules and fetch API, it must be served via a local web server (opening the HTML file directly in the browser will cause CORS errors). 
+
+To make this seamless, a standalone executable has been provided:
+- **Quick Launch**: Simply double-click the `Vietnam_Terminal_Launcher.exe` file located in the root project folder. This will automatically start a local background server on an available port and immediately open the terminal interface in your default web browser.
+
+*(Alternatively, you can manually run `python -m http.server 8000` and visit `http://localhost:8000/terminal.html`)*
 
 ## Generative AI Techniques and Interactions
 
