@@ -1,0 +1,828 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>VIETNAM WAR COMMAND TERMINAL</title>
+    <!-- Lightweight Charts Library -->
+    <script src="https://unpkg.com/lightweight-charts@4.1.1/dist/lightweight-charts.standalone.production.js"></script>
+    <style>
+        :root {
+            --bg-color: #0d120e;
+            /* Very dark military green/black */
+            --panel-bg: #121a14;
+            --text-color: #33ff33;
+            /* Terminal green */
+            --text-faded: #e0e0e0;
+            /* Faded typewriter white */
+            --border-color: #2a4a2a;
+            --up-color: #7ab57c;
+            /* Pale green (Pro-Peace) */
+            --down-color: #aa1111;
+            /* Blood red (Pro-War) */
+        }
+
+        body {
+            margin: 0;
+            padding: 0;
+            background-color: var(--bg-color);
+            color: var(--text-color);
+            font-family: 'Courier New', Courier, monospace;
+            height: 100vh;
+            display: flex;
+            overflow: hidden;
+        }
+
+        /* Scanline CRT screen effect */
+        body::after {
+            content: " ";
+            display: block;
+            position: absolute;
+            top: 0;
+            left: 0;
+            bottom: 0;
+            right: 0;
+            background: linear-gradient(rgba(18, 16, 16, 0) 50%, rgba(0, 0, 0, 0.25) 50%),
+                linear-gradient(90deg, rgba(255, 0, 0, 0.06), rgba(0, 255, 0, 0.02), rgba(0, 0, 255, 0.06));
+            z-index: 10;
+            background-size: 100% 2px, 3px 100%;
+            pointer-events: none;
+            /* Do not block clicks */
+        }
+
+        #chart-container {
+            width: 70%;
+            height: 100%;
+            border-right: 2px solid var(--border-color);
+            box-sizing: border-box;
+            position: relative;
+        }
+
+        .overlay-title {
+            position: absolute;
+            top: 15px;
+            left: 15px;
+            z-index: 5;
+            background-color: rgba(13, 18, 14, 0.85);
+            padding: 8px 15px;
+            border: 1px solid var(--border-color);
+            font-weight: bold;
+            box-shadow: 0 0 10px rgba(51, 255, 51, 0.2);
+        }
+
+        #log-panel {
+            width: 30%;
+            height: 100%;
+            padding: 20px;
+            box-sizing: border-box;
+            background-color: var(--panel-bg);
+            display: flex;
+            flex-direction: column;
+            z-index: 5;
+        }
+
+        .header {
+            text-align: center;
+            border-bottom: 2px dashed var(--border-color);
+            padding-bottom: 15px;
+            margin-bottom: 15px;
+            text-transform: uppercase;
+            letter-spacing: 2px;
+            text-shadow: 0 0 5px var(--text-color);
+        }
+
+        .log-date {
+            font-size: 1.2em;
+            font-weight: bold;
+            margin-bottom: 10px;
+            color: var(--text-faded);
+        }
+
+        .log-sentiment {
+            font-size: 1.1em;
+            margin-bottom: 20px;
+            border-left: 3px solid var(--border-color);
+            padding-left: 10px;
+        }
+
+        .sentiment-peace {
+            color: var(--up-color);
+            font-weight: bold;
+            text-shadow: 0 0 5px var(--up-color);
+        }
+
+        .sentiment-war {
+            color: var(--down-color);
+            font-weight: bold;
+            text-shadow: 0 0 5px var(--down-color);
+        }
+
+        .sentiment-neutral {
+            color: #dddd33;
+            /* Yellow/Neutral */
+            font-weight: bold;
+            text-shadow: 0 0 5px #dddd33;
+        }
+
+        .log-news-container {
+            flex-grow: 1;
+            overflow-y: auto;
+            border: 1px solid var(--border-color);
+            padding: 15px;
+            background-color: #080b08;
+            color: var(--text-faded);
+            font-size: 0.9em;
+            scrollbar-width: thin;
+            scrollbar-color: var(--border-color) var(--bg-color);
+        }
+
+        /* Custom Scrollbar (Chrome/Edge) */
+        .log-news-container::-webkit-scrollbar {
+            width: 8px;
+        }
+
+        .log-news-container::-webkit-scrollbar-track {
+            background: var(--bg-color);
+        }
+
+        .log-news-container::-webkit-scrollbar-thumb {
+            background-color: var(--border-color);
+        }
+
+        .news-item {
+            margin-bottom: 15px;
+            line-height: 1.5;
+            position: relative;
+        }
+
+        .news-item::before {
+            content: "> ";
+            color: var(--text-color);
+            font-weight: bold;
+        }
+
+        .cursor {
+            display: inline-block;
+            width: 8px;
+            height: 15px;
+            background-color: var(--text-faded);
+            animation: blink 1s step-end infinite;
+            vertical-align: bottom;
+            margin-left: 2px;
+        }
+
+        @keyframes blink {
+
+            0%,
+            100% {
+                opacity: 1;
+            }
+
+            50% {
+                opacity: 0;
+            }
+        }
+    </style>
+</head>
+
+<body>
+
+    <div id="chart-container">
+        <div class="overlay-title">CLASSIFIED: VIETNAM WAR SENTIMENT EXCHANGE (1950-1980)</div>
+    </div>
+
+    <div id="log-panel">
+        <div class="header">
+            <h3>MILITARY INTELLIGENCE LOG</h3>
+            <span style="font-size: 0.8em;">TOP SECRET - EYES ONLY</span>
+        </div>
+
+        <div id="audio-controls"
+            style="margin-bottom: 15px; display: flex; justify-content: space-between; align-items: center; border: 1px solid var(--border-color); padding: 10px; background-color: #080b08;">
+            <button id="btn-master-toggle"
+                style="background-color: var(--border-color); color: var(--text-color); border: none; padding: 8px 15px; cursor: pointer; font-family: monospace; font-weight: bold; font-size: 1em;">[
+                START SYSTEM ]</button>
+            <div id="audio-status" style="font-size: 0.8em; color: var(--text-faded); font-weight: bold; text-align: right;">
+                STATUS: STANDBY
+            </div>
+        </div>
+
+        <div id="log-date" class="log-date">NO DATE SELECTED</div>
+        <div id="log-sentiment" class="log-sentiment">Waiting...</div>
+
+        <div style="margin-bottom: 5px; color: var(--text-color);">[ INTERCEPTED TRANSMISSIONS ]</div>
+        <div id="log-news-container" class="log-news-container">
+            Waiting for signal... Click on an event day on the chart.
+        </div>
+    </div>
+
+    <script>
+        // ============================================================
+        // ADAPTIVE/DYNAMIC AUDIO ENGINE v2.0
+        // Chain: stems[i].source → stemGain → masterGain → lowpassFilter
+        //        → dryGain → destination
+        //        → delayNode ⟲ feedbackGain → delayWetGain → destination
+        // ============================================================
+        const AudioContext = window.AudioContext || window.webkitAudioContext;
+        const audioCtx = new AudioContext();
+
+        // ── 1. STEM DEFINITIONS ────────────────────────────────────────
+        // 4 real stem files: bass | drums | music | vocals
+        // gain rises from 0 to 1 in the thresholdIn → thresholdOut range.
+        // If "always" = true the stem stays fully open at all times.
+        const stems = [
+            {
+                id: "bass",
+                path: "stems/bass.mp3",
+                always: true,          // Backbone of the rhythm — always plays
+                thresholdIn:  -100,
+                thresholdOut: -100,    // Not used (always=true)
+                buffer: null, source: null, gainNode: null
+            },
+            {
+                id: "drums",
+                path: "stems/drums.mp3",
+                always: false,
+                thresholdIn:  -100,    // fade-in starts from -100
+                thresholdOut:  -30,    // full power at -30
+                buffer: null, source: null, gainNode: null
+            },
+            {
+                id: "music",
+                path: "stems/music.mp3",
+                always: false,
+                thresholdIn:  -50,     // enters softly from -50
+                thresholdOut:  30,     // full power at +30
+                buffer: null, source: null, gainNode: null
+            },
+            {
+                id: "vocals",
+                path: "stems/vocals.mp3",
+                always: false,
+                thresholdIn:   20,     // silent until +20
+                thresholdOut:  80,     // full power at +80 (victory/peace moment)
+                buffer: null, source: null, gainNode: null
+            }
+        ];
+
+        // ── 2. GLOBAL AUDIO CHAIN NODES ──────────────────────────────
+        const masterGain    = audioCtx.createGain();   // Ana seviye
+        masterGain.gain.value = 0.85;
+
+        const lowpassFilter = audioCtx.createBiquadFilter();
+        lowpassFilter.type  = "lowpass";
+        lowpassFilter.frequency.value = 20000;         // Open at startup
+        lowpassFilter.Q.value = 1.2;
+
+        // Dry path (no effects)
+        const dryGain       = audioCtx.createGain();
+        dryGain.gain.value  = 1.0;
+
+        // Delay / Reverb path (wet)
+        const delayNode     = audioCtx.createDelay(2.0);
+        delayNode.delayTime.value = 0.45;              // 450ms echo
+
+        const feedbackGain  = audioCtx.createGain();
+        feedbackGain.gain.value = 0.35;               // Feedback ratio
+
+        const delayWetGain  = audioCtx.createGain();
+        delayWetGain.gain.value = 0.0;                // Dry at startup (wet=0)
+
+        // Delay feedback loop
+        delayNode.connect(feedbackGain);
+        feedbackGain.connect(delayNode);
+
+        // Connect main chain: master → lowpass → dry → dest
+        masterGain.connect(lowpassFilter);
+        lowpassFilter.connect(dryGain);
+        dryGain.connect(audioCtx.destination);
+
+        // Wet path: lowpass → delay → delayWet → dest
+        lowpassFilter.connect(delayNode);
+        delayNode.connect(delayWetGain);
+        delayWetGain.connect(audioCtx.destination);
+
+        // ── 3. STATE VARIABLES ───────────────────────────────────────
+        let isSystemActive        = false;
+        let currentTargetMusicScore = 0;  // Raw score (-100…+100)
+        let smoothedMusicScore    = 0;    // Smoothed score
+        let prevSmoothedScore     = 0;    // Previous score for derivative calculation
+        let smoothedPlaybackRate  = 1.0;  // Playback rate target (smoothed)
+        let audioLoaded           = false;
+
+        // ── 4. UTILITY FUNCTIONS ─────────────────────────────────────
+        function lerp(a, b, t) { return a + (b - a) * t; }
+
+        /** Normalizes a value from [inMin,inMax] range to [0,1], clamps */
+        function invLerp(val, min, max) {
+            return Math.max(0, Math.min(1, (val - min) / (max - min)));
+        }
+
+        // ── 5. LOADING ───────────────────────────────────────────────
+        async function loadAudioFiles() {
+            document.getElementById('audio-status').innerHTML = "STATUS: LOADING STEMS...";
+            try {
+                for (let stem of stems) {
+                    const res   = await fetch(stem.path);
+                    const buf   = await res.arrayBuffer();
+                    stem.buffer = await audioCtx.decodeAudioData(buf);
+
+                    stem.gainNode = audioCtx.createGain();
+                    stem.gainNode.gain.value = 0;
+                    stem.gainNode.connect(masterGain);   // stem → masterGain
+                }
+                audioLoaded = true;
+                document.getElementById('audio-status').innerHTML = "STATUS: STANDBY";
+            } catch (e) {
+                console.error("Stem load error:", e);
+                document.getElementById('audio-status').innerHTML = "STATUS: AUDIO ERROR";
+            }
+        }
+        loadAudioFiles();
+
+        // ── 6. START / STOP ──────────────────────────────────────────
+        function startAllTracks() {
+            if (audioCtx.state === 'suspended') audioCtx.resume();
+            stems.forEach(stem => {
+                if (!stem.source && stem.buffer) {
+                    stem.source          = audioCtx.createBufferSource();
+                    stem.source.buffer   = stem.buffer;
+                    stem.source.loop     = true;
+                    stem.source.connect(stem.gainNode);
+                    stem.source.start(0);
+                }
+            });
+        }
+
+        function stopAllTracks() {
+            stems.forEach(stem => {
+                if (stem.source) {
+                    try { stem.source.stop(); } catch(_){}
+                    stem.source.disconnect();
+                    stem.source = null;
+                }
+                if (stem.gainNode) stem.gainNode.gain.value = 0;
+            });
+            // Reset effects
+            lowpassFilter.frequency.value = 20000;
+            delayWetGain.gain.value = 0;
+            smoothedPlaybackRate = 1.0;
+        }
+
+        // ── 7. MAIN UPDATE LOOP ──────────────────────────────────────
+        function updateAudioEffects() {
+            if (!isSystemActive) return;
+
+            const SMOOTH_AMT = 0.004;   // Score smoothing coefficient
+            const now = audioCtx.currentTime;
+            const T   = 0.08;           // setTargetAtTime time constant (seconds)
+
+            // 7a. Smooth the score
+            prevSmoothedScore  = smoothedMusicScore;
+            smoothedMusicScore = lerp(smoothedMusicScore, currentTargetMusicScore, SMOOTH_AMT);
+
+            // 7b. Instantaneous derivative (slope) — change in one frame
+            const slope = smoothedMusicScore - prevSmoothedScore;
+
+            // ── Feature 1: STEM LAYERING ──────────────────────────────
+            // Determine target gain for each stem based on -100…+100 score
+            stems.forEach(stem => {
+                let targetGain;
+                if (stem.always) {
+                    targetGain = 1.0;
+                } else {
+                    // smoothedMusicScore goes 0→1 within [thresholdIn → thresholdOut]
+                    targetGain = invLerp(smoothedMusicScore, stem.thresholdIn, stem.thresholdOut);
+                }
+                // Smooth transition (no pop/click)
+                if (stem.gainNode) {
+                    stem.gainNode.gain.setTargetAtTime(targetGain, now, T);
+                }
+            });
+
+            // ── Feature 2: LOW-PASS FILTER ────────────────────────────
+            // When score is -100→0 the filter drops to 800Hz (muffled)
+            // When score is 0→+100 stays at 20000Hz (open)
+            let targetFreq;
+            if (smoothedMusicScore < 0) {
+                // -100 → 800Hz, 0 → 20000Hz (linear map is sufficient for log range)
+                const t = invLerp(smoothedMusicScore, -100, 0);   // 0→1
+                targetFreq = lerp(800, 20000, t);
+            } else {
+                targetFreq = 20000;
+            }
+            lowpassFilter.frequency.setTargetAtTime(targetFreq, now, 0.5);
+
+            // ── Feature 3: PLAYBACK RATE (Pitch/Tempo) ────────────────
+            // Normalize instantaneous slope; sudden rise → speed up, fall → slow down
+            // Typical slope range: ±0.05 → bring to ±1 band with ×200
+            const normalizedSlope = Math.max(-1, Math.min(1, slope * 200));
+            let targetRate;
+            if (normalizedSlope > 0) {
+                targetRate = lerp(1.0, 1.08, normalizedSlope);   // Rising: 1.0→1.08
+            } else {
+                targetRate = lerp(1.0, 0.95, -normalizedSlope);  // Falling: 1.0→0.95
+            }
+            // Also smooth the rate (prevent sudden pitch jumps)
+            smoothedPlaybackRate = lerp(smoothedPlaybackRate, targetRate, 0.03);
+            stems.forEach(stem => {
+                if (stem.source) stem.source.playbackRate.setTargetAtTime(smoothedPlaybackRate, now, 0.1);
+            });
+
+            // ── Feature 4: DELAY / REVERB (Wet channel) ───────────────
+            // When score drops below -50, wet gain increases (max 0.7 → abyss feeling)
+            let wetTarget;
+            if (smoothedMusicScore < -50) {
+                wetTarget = invLerp(smoothedMusicScore, -50, -100) * 0.7; // 0→0.7
+            } else {
+                wetTarget = 0;
+            }
+            delayWetGain.gain.setTargetAtTime(wetTarget, now, 0.8);
+
+            // ── Update HUD ────────────────────────────────────────────
+            const activeStemLabels = stems
+                .filter(s => s.gainNode && s.gainNode.gain.value > 0.05)
+                .map(s => s.id.toUpperCase())
+                .join('+') || 'SILENT';
+
+            const rateStr   = smoothedPlaybackRate.toFixed(3);
+            const freqStr   = Math.round(targetFreq);
+            const wetPct    = Math.round(wetTarget * 100);
+
+            document.getElementById('audio-status').innerHTML =
+                `ATM: <span style="color:#ffff33;">${smoothedMusicScore.toFixed(1)}</span> ` +
+                `| RATE: <span style="color:#aaffaa;">${rateStr}x</span><br>` +
+                `STEMS: <span style="color:var(--text-color);">${activeStemLabels}</span><br>` +
+                `LPF: <span style="color:#aaaaff;">${freqStr}Hz</span> ` +
+                `| WET: <span style="color:#ffaaaa;">${wetPct}%</span>`;
+
+            requestAnimationFrame(updateAudioEffects);
+        }
+
+        // Legacy alias to preserve old name (btn handler calls this)
+        function updateAudioCrossfade() { updateAudioEffects(); }
+
+        // ── 8. MUSIC SCORE CALCULATION ───────────────────────────────
+        function calculateMusicScore(currentIndex, dataArray) {
+            if (currentIndex < 1) return 0;
+            const current = dataArray[currentIndex];
+
+            const lookback = Math.max(0, currentIndex - 30);
+            const change   = current.close - dataArray[lookback].close;
+            const volatility = current.high - current.low;
+            const normalizedVolume = Math.min(current.volume / 5000, 1.0);
+
+            let rawScore   = change * 1.0;
+            const multiplier = 1.0 + (volatility * 0.05) + (normalizedVolume * 0.2);
+            rawScore *= multiplier;
+
+            return Math.max(-100, Math.min(100, rawScore));
+        }
+
+        // --------------------------------------------------------
+        // MAIN APPLICATION LOGIC
+        // --------------------------------------------------------
+        async function initTerminal() {
+            try {
+                // Fetch JSON data
+                const response = await fetch('analyze_data/ohlc_data.json');
+                if (!response.ok) throw new Error("Data file not found.");
+                const rawData = await response.json();
+
+                // 1. Data Grouping (Daily Aggregation)
+                const dailyDataMap = new Map();
+
+                rawData.forEach(item => {
+                    const date = item.time.split(' ')[0]; // Extract only yyyy-mm-dd portion
+                    if (!dailyDataMap.has(date)) {
+                        dailyDataMap.set(date, {
+                            time: date,
+                            open: item.open,       // FIRST opening price of the day
+                            high: item.high,       // Highest price of the day
+                            low: item.low,         // Lowest price of the day
+                            close: item.close,     // LAST closing price of the day
+                            volume_sum: 0,
+                            sentiment_sum: 0,
+                            count: 0,
+                            texts: []
+                        });
+                    }
+                    const day = dailyDataMap.get(date);
+
+                    // Update High and Low as maximum/minimum
+                    if (item.high > day.high) day.high = item.high;
+                    if (item.low < day.low) day.low = item.low;
+
+                    // Always update Close with the latest news (making it the day's final close)
+                    day.close = item.close;
+
+                    day.volume_sum += item.volume;
+                    day.sentiment_sum += item.sentiment_index;
+                    day.count += 1;
+                    day.texts.push(item.text); // Add news to the list
+                });
+
+                // New Logic: Candle sizes should be directly proportional to avg_sentiment
+                let current_price = 1000.0; // Starting point for the chart
+
+                const aggregatedData = Array.from(dailyDataMap.values()).map(day => {
+                    const avg_sentiment = day.sentiment_sum / day.count;
+
+                    // Opening price equals yesterday's close
+                    const open_price = current_price;
+
+                    // Using linear (additive) change instead of percentage (multiplicative) growth
+                    // This prevents exponential explosions like e+24 over 30 years of data.
+                    // A full Peace score of 100 adds +25 units to the price.
+                    const change_amount = (avg_sentiment / 100) * 25.0;
+                    const close_price = open_price + change_amount;
+
+                    // Wicks also extend based on the intensity (absolute value) of the score (max 15 units of wick)
+                    const volatility = (Math.abs(avg_sentiment) / 100) * 15.0;
+                    const high_price = Math.max(open_price, close_price) + volatility;
+                    const low_price = Math.min(open_price, close_price) - volatility;
+
+                    // Update price for the next day's opening
+                    current_price = close_price;
+
+                    return {
+                        time: day.time,
+                        open: open_price,
+                        high: high_price,
+                        low: low_price,
+                        close: close_price,
+                        volume: day.volume_sum, // Accumulate volume
+                        sentiment: avg_sentiment,
+                        texts: day.texts,
+                        label: avg_sentiment > 0 ? "PRO-PEACE" : (avg_sentiment < 0 ? "PRO-WAR" : "NEUTRAL")
+                    };
+                });
+
+                // Sort by date
+                aggregatedData.sort((a, b) => new Date(a.time) - new Date(b.time));
+
+                // 2. Prepare Chart (Lightweight Charts)
+                const chartContainer = document.getElementById('chart-container');
+                const chart = LightweightCharts.createChart(chartContainer, {
+                    layout: {
+                        background: { type: 'solid', color: 'transparent' },
+                        textColor: '#33ff33',
+                    },
+                    grid: {
+                        vertLines: { color: 'rgba(42, 74, 42, 0.4)' },
+                        horzLines: { color: 'rgba(42, 74, 42, 0.4)' },
+                    },
+                    crosshair: {
+                        mode: LightweightCharts.CrosshairMode.Normal,
+                        vertLine: { color: '#33ff33', style: 2 },
+                        horzLine: { color: '#33ff33', style: 2 },
+                    },
+                    timeScale: {
+                        borderColor: '#2a4a2a',
+                    },
+                    rightPriceScale: {
+                        borderColor: '#2a4a2a',
+                    }
+                });
+
+                const candlestickSeries = chart.addCandlestickSeries({
+                    upColor: '#7ab57c',      // Pale green
+                    downColor: '#aa1111',    // Blood red
+                    borderVisible: false,
+                    wickUpColor: '#7ab57c',
+                    wickDownColor: '#aa1111',
+                });
+
+                // Format to be transferred to the chart
+                const chartData = aggregatedData.map(d => ({
+                    time: d.time,
+                    open: d.open,
+                    high: d.high,
+                    low: d.low,
+                    close: d.close
+                }));
+
+                candlestickSeries.setData(chartData);
+                chart.timeScale().fitContent();
+
+                // --------------------------------------------------------
+                // AUTOPLAY (AUTO PILOT) LOGIC
+                // --------------------------------------------------------
+                let currentPlayIndex = 0;
+                let autoplayInterval = null;
+
+                document.getElementById('btn-master-toggle').addEventListener('click', (e) => {
+                    if (!audioLoaded) {
+                        alert("Audio files are being analyzed for a fully gapless loop, please wait a few seconds...");
+                        return;
+                    }
+
+                    isSystemActive = !isSystemActive;
+                    const btn = e.target;
+                    
+                    if (isSystemActive) {
+                        btn.textContent = "[ SYSTEM ACTIVE ]";
+                        btn.style.color = "var(--bg-color)";
+                        btn.style.backgroundColor = "var(--up-color)";
+                        btn.style.borderColor = "var(--up-color)";
+
+                        // Start audio engine
+                        startAllTracks();
+                        requestAnimationFrame(updateAudioCrossfade);
+
+                        clearTypewriter();
+
+                        // User request: Cursor should progress slightly slower. (180ms = ~5 days per second)
+                        autoplayInterval = setInterval(goToNextDay, 180);
+                    } else {
+                        btn.textContent = "[ START SYSTEM ]";
+                        btn.style.color = "var(--text-color)";
+                        btn.style.backgroundColor = "var(--border-color)";
+                        btn.style.borderColor = "transparent";
+                        
+                        // Stop progression
+                        clearInterval(autoplayInterval);
+                        
+                        // Stop all audio
+                        stopAllTracks();
+                        document.getElementById('audio-status').innerHTML = "STATUS: STANDBY";
+                    }
+                });
+
+                function goToNextDay() {
+                    if (!isSystemActive) return;
+                    if (currentPlayIndex >= aggregatedData.length) {
+                        isSystemActive = false;
+                        const btn = document.getElementById('btn-master-toggle');
+                        btn.textContent = "[ SYSTEM FINISHED ]";
+                        btn.style.backgroundColor = "var(--border-color)";
+                        btn.style.color = "var(--text-faded)";
+                        btn.style.borderColor = "transparent";
+                        clearInterval(autoplayInterval);
+                        stopAllTracks();
+                        document.getElementById('audio-status').innerHTML = "STATUS: COMPLETED";
+                        return;
+                    }
+
+                    const dayData = aggregatedData[currentPlayIndex];
+
+                    currentTargetMusicScore = calculateMusicScore(currentPlayIndex, aggregatedData);
+
+                    candlestickSeries.setMarkers([{
+                        time: dayData.time,
+                        position: 'aboveBar',
+                        color: '#dddd33',
+                        shape: 'arrowDown',
+                        text: 'AUDIO'
+                    }]);
+
+                    // Make the camera slowly track the Cursor
+                    const visibleRange = chart.timeScale().getVisibleLogicalRange();
+                    if (visibleRange) {
+                        const windowSize = visibleRange.to - visibleRange.from;
+                        // If the cursor approaches the right 70% of the screen, pan the camera right at the same speed (1 unit)
+                        if (currentPlayIndex > visibleRange.from + windowSize * 0.7) {
+                            chart.timeScale().setVisibleLogicalRange({
+                                from: visibleRange.from + 1,
+                                to: visibleRange.to + 1
+                            });
+                        } else if (currentPlayIndex < visibleRange.from || currentPlayIndex > visibleRange.to) {
+                            // If the user zoomed out too far, center the camera on the cursor
+                            chart.timeScale().setVisibleLogicalRange({
+                                from: currentPlayIndex - windowSize / 2,
+                                to: currentPlayIndex + windowSize / 2
+                            });
+                        }
+                    }
+
+                    updateLogPanel(dayData, true); // Don't use typewriter effect in Autoplay mode
+                    currentPlayIndex++;
+                }
+
+                // 3. Interaction and Typewriter Effect
+                const dateEl = document.getElementById('log-date');
+                const sentimentEl = document.getElementById('log-sentiment');
+                const newsContainer = document.getElementById('log-news-container');
+
+                let typewriterTimeouts = [];
+
+                function clearTypewriter() {
+                    typewriterTimeouts.forEach(t => clearTimeout(t));
+                    typewriterTimeouts = [];
+                    newsContainer.innerHTML = '';
+                }
+
+                function updateLogPanel(dayData, isAutoplay = false) {
+                    // Update top section
+                    dateEl.textContent = `DATE: ${dayData.time}`;
+
+                    const score = dayData.sentiment.toFixed(2);
+                    const labelClass = dayData.label === "PRO-PEACE" ? "sentiment-peace" : (dayData.label === "PRO-WAR" ? "sentiment-war" : "sentiment-neutral");
+                    sentimentEl.innerHTML = `STATUS: <span class="${labelClass}">[ ${dayData.label} ]</span> <br><span style="font-size:0.8em; color:var(--text-color);">AVG INDEX: ${score}</span>`;
+
+                    // Reset news and start typewriter effect
+                    clearTypewriter();
+
+                    // If in Autoplay (Time Machine) mode, skip typewriter and show news instantly
+                    if (isAutoplay) {
+                        if (dayData.texts && dayData.texts.length > 0) {
+                            newsContainer.innerHTML = `<div class="news-item"><span>${dayData.texts[0].substring(0, 80)}...</span></div>`;
+                        }
+                        return;
+                    }
+
+                    let currentNewsIndex = 0;
+
+                    function typeNextNews() {
+                        if (currentNewsIndex >= dayData.texts.length) {
+                            // Leave a small cursor at the end when finished
+                            newsContainer.innerHTML += '<span class="cursor"></span>';
+                            newsContainer.scrollTop = newsContainer.scrollHeight;
+                            return;
+                        }
+
+                        const newsText = dayData.texts[currentNewsIndex];
+                        const newsItem = document.createElement('div');
+                        newsItem.className = 'news-item';
+
+                        // Empty span and cursor will be added to write content
+                        const textSpan = document.createElement('span');
+                        const cursorSpan = document.createElement('span');
+                        cursorSpan.className = 'cursor';
+
+                        newsItem.appendChild(textSpan);
+                        newsItem.appendChild(cursorSpan);
+                        newsContainer.appendChild(newsItem);
+
+                        let charIndex = 0;
+                        function typeChar() {
+                            if (charIndex < newsText.length) {
+                                textSpan.textContent += newsText.charAt(charIndex);
+                                charIndex++;
+                                newsContainer.scrollTop = newsContainer.scrollHeight;
+
+                                // Typewriter speed (randomized)
+                                const delay = Math.random() * 20 + 10;
+                                typewriterTimeouts.push(setTimeout(typeChar, delay));
+                            } else {
+                                // A news item finished, remove cursor and move to the next
+                                cursorSpan.remove();
+                                currentNewsIndex++;
+                                typewriterTimeouts.push(setTimeout(typeNextNews, 400));
+                            }
+                        }
+                        typeChar();
+                    }
+
+                    typeNextNews();
+                }
+
+                // Chart Click Event
+                chart.subscribeClick(param => {
+                    if (!param.time) return;
+                    const index = aggregatedData.findIndex(d => d.time === param.time);
+                    if (index !== -1) {
+                        currentPlayIndex = index; // Synchronize with Autoplay
+                        const dayData = aggregatedData[index];
+
+                        // Cancel previous timers (bug fix)
+                        clearTypewriter();
+
+                        currentTargetMusicScore = calculateMusicScore(index, aggregatedData);
+
+                        // Show the current candle with a marker
+                        candlestickSeries.setMarkers([
+                            {
+                                time: param.time,
+                                position: 'aboveBar',
+                                color: '#dddd33',
+                                shape: 'arrowDown',
+                                text: 'AUDIO FOCUS'
+                            }
+                        ]);
+
+                        updateLogPanel(dayData);
+                    }
+                });
+
+                // Resize chart when screen resizes
+                window.addEventListener('resize', () => {
+                    chart.resize(chartContainer.clientWidth, chartContainer.clientHeight);
+                });
+
+            } catch (error) {
+                console.error("Error:", error);
+                document.getElementById('log-news-container').innerHTML =
+                    `<span style="color:#aa1111; font-weight:bold;">[!] SYSTEM ERROR:</span><br><br>
+                     Actual Error Message: <span style="color:yellow;">${error.message}</span><br>
+                     Stack: <span style="color:gray; font-size:0.8em">${error.stack}</span>`;
+            }
+        }
+
+        // Start
+        initTerminal();
+    </script>
+</body>
+
+</html>
